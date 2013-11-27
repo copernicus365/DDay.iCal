@@ -41,21 +41,21 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>..\..\bin\DDay.iCal\</OutputPath>
     <DefineConstants>TRACE;DEBUG;DATACONTRACT</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <DocumentationFile>bin\Debug\DDay.iCal.XML</DocumentationFile>
+    <DocumentationFile>..\..\bin\DDay.iCal\DDay.iCal.xml</DocumentationFile>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\..\bin\DDay.iCal\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <DocumentationFile>bin\Release\DDay.iCal.XML</DocumentationFile>
+    <DocumentationFile>..\..\bin\DDay.iCal\DDay.iCal.xml</DocumentationFile>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
@@ -300,7 +300,8 @@
   -->
   <PropertyGroup>
     <!--    <PreBuildEvent>subwcrev.exe $(ProjectDir). $(ProjectDir)Properties\AssemblyInfo.cs.template $(ProjectDir)Properties\AssemblyInfo.cs</PreBuildEvent>
-    --><PostBuildEvent>
+    -->
+    <PostBuildEvent>
     </PostBuildEvent>
   </PropertyGroup>
 </Project>

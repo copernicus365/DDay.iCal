@@ -124,6 +124,10 @@
     <Compile Include="TodoTest.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\DDay.Collections\DDay.Collections\DDay.Collections.csproj">
+      <Project>{e04efeb6-4625-4d58-ac91-7b8b8a2c97bb}</Project>
+      <Name>DDay.Collections</Name>
+    </ProjectReference>
     <ProjectReference Include="..\DDay.iCal\DDay.iCal.csproj">
       <Project>{F88DB6D3-CB95-4707-9C88-B53403AADC61}</Project>
       <Name>DDay.iCal</Name>
@@ -337,7 +341,7 @@
     <None Include="Calendars\Recurrence\DailyByDay1.ics">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-	<None Include="Calendars\Recurrence\WeeklyInterval1.ics">
+    <None Include="Calendars\Recurrence\WeeklyInterval1.ics">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="Calendars\Recurrence\WeeklyWeekStartsLastYear.ics">
