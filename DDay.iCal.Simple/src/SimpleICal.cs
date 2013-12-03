@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using DDay.iCal.Simple;
-using DDay.iCal.Simple.TZ;
+using DotNetXtensions;
+using DotNetXtensions.Globalization;
 
 namespace DDay.iCal.Simple
 {
@@ -41,12 +42,43 @@ namespace DDay.iCal.Simple
 			if (calendarColl == null)
 				return null;
 
-			return GetEvents(calendarColl);
+			return GetEvents(calendarColl.ToArray());
 		}
 
-		public SEvent[] GetEvents(IICalendarCollection calCollection)
+		void GetRepeatingIds(IICalendar cal, ref IEvent[] events, ref KeyValuePair<string, IEvent> repeatingIds)
 		{
-			if (calCollection == null || calCollection.Count < 1)
+			//events = cal.Events.Where(e => e != null && e.Start != null).ToArray();
+			
+			//Dictionary<string, 
+			//int len = events.Length;
+
+			//for (int i = 0; i < len; i++) {
+
+			//}
+
+			//Dictionary<string, IEvent> d
+		}
+
+		public List<GroupKV<IEvent,string>> GetEventsTEMP(IICalendar[] calCollection)
+		{
+			if (calCollection == null || calCollection.Length < 1)
+				return null;
+
+			__EarliestIncludeEventTime = EarliestDateForExcludingEvents();
+			__Now = DateTime.UtcNow;
+
+			var events = new List<SEvent>();
+
+			var cal = calCollection.First();
+
+			var list = cal.Events.GroupByQuick(e => e.UID);
+
+			return list;
+		}
+
+		public SEvent[] GetEvents(IICalendar[] calCollection)
+		{
+			if (calCollection == null || calCollection.Length < 1)
 				return null;
 
 			__EarliestIncludeEventTime = EarliestDateForExcludingEvents();
@@ -55,12 +87,14 @@ namespace DDay.iCal.Simple
 			var events = new List<SEvent>();
 
 			foreach (var cal in calCollection) {
+				
 				double timeZoneUtcOffset = 0;
 
 				CurrentTimeZone = cal.GetTimeZone();
 				if (CurrentTimeZone == null)
 					CurrentTimeZone = DefaultTimeZone;
 
+			
 				foreach (var evnt in cal.Events.Where(e => e != null && e.Start != null)) {
 
 					if (evnt.End == null)
