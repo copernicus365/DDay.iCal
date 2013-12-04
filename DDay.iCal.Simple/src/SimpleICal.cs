@@ -12,19 +12,27 @@ namespace DDay.iCal.Simple
 	{
 		#region FIELDS / PROPERTIES
 
-		public const double NumPrevDaysToDisplay = 2;
-		public static bool SetUpdatedEventTimeToStartTime = false;
-
-		private DateTime __EarliestIncludeEventTime = EarliestDateForExcludingEvents();
-		private DateTime __Now = DateTime.UtcNow;
+		public DateTime EarliestIncludeEventTime { get; set; }
 
 		public TimeZoneInfo DefaultTimeZone { get; set; }
+		public bool SetUpdatedEventTimeToStartTime = false;
+		public string FeedIdBase { get; set; }
 
-		private TimeZoneInfo CurrentTimeZone;
-
-		public string LocalIdBase { get; set; }
+		private DateTime _now = DateTime.UtcNow;
+		private TimeZoneInfo _currentTZ;
 
 		#endregion
+
+		#region CONSTRUCTOR
+
+		public SimpleICal(DateTime? earliestIncludeEventTime = null)
+		{
+			EarliestIncludeEventTime = earliestIncludeEventTime ?? DateTime.MinValue;
+		}
+
+		#endregion
+
+		#region GetCalendar / GetEvents
 
 		public static IICalendarCollection GetCalendar(byte[] data)
 		{
@@ -45,90 +53,100 @@ namespace DDay.iCal.Simple
 			return GetEvents(calendarColl.ToArray());
 		}
 
-		void GetRepeatingIds(IICalendar cal, ref IEvent[] events, ref KeyValuePair<string, IEvent> repeatingIds)
+		public SEvent[] GetEvents(IICalendarCollection calCollection)
 		{
-			//events = cal.Events.Where(e => e != null && e.Start != null).ToArray();
-			
-			//Dictionary<string, 
-			//int len = events.Length;
-
-			//for (int i = 0; i < len; i++) {
-
-			//}
-
-			//Dictionary<string, IEvent> d
+			if (calCollection == null) return null;
+			return GetEvents(calCollection.ToArray());
 		}
 
-		public List<GroupKV<IEvent,string>> GetEventsTEMP(IICalendar[] calCollection)
+		public SEvent[] GetEvents(IEnumerable<IICalendar> calendarCollection)
 		{
-			if (calCollection == null || calCollection.Length < 1)
+			var calCollection = calendarCollection.ToArrayOrNull();
+			if (calCollection.IsNullOrEmpty())
 				return null;
 
-			__EarliestIncludeEventTime = EarliestDateForExcludingEvents();
-			__Now = DateTime.UtcNow;
+			_now = DateTime.UtcNow;
 
-			var events = new List<SEvent>();
-
-			var cal = calCollection.First();
-
-			var list = cal.Events.GroupByQuick(e => e.UID);
-
-			return list;
-		}
-
-		public SEvent[] GetEvents(IICalendar[] calCollection)
-		{
-			if (calCollection == null || calCollection.Length < 1)
-				return null;
-
-			__EarliestIncludeEventTime = EarliestDateForExcludingEvents();
-			__Now = DateTime.UtcNow;
-
-			var events = new List<SEvent>();
+			var fevents = new List<SEvent>();
 
 			foreach (var cal in calCollection) {
-				
+
 				double timeZoneUtcOffset = 0;
 
-				CurrentTimeZone = cal.GetTimeZone();
-				if (CurrentTimeZone == null)
-					CurrentTimeZone = DefaultTimeZone;
+				_currentTZ = cal.GetTimeZone();
+				if (_currentTZ == null)
+					_currentTZ = DefaultTimeZone;
 
-			
-				foreach (var evnt in cal.Events.Where(e => e != null && e.Start != null)) {
+				var events = cal.Events.Where(e => e != null && e.Start != null).GroupByQuick(e => e.UID);
 
-					if (evnt.End == null)
-						evnt.End = evnt.Start;
+				foreach (var group in events) {
 
-					var recurrence = evnt.RecurrenceRules.FirstOrDefault();
-					if (recurrence != null) {
-						foreach (var ev in GetRecurringEvents(evnt, recurrence))
-							if (ev != null)
-								events.Add(ev);
+					SEvent[] recurringEvents = GetRecurringEvents(group);
+
+					if (recurringEvents != null) {
+						foreach (var ev in recurringEvents) {
+							if (ev != null) {
+								if (ev.End == null) ev.End = ev.Start;
+								fevents.Add(ev);
+							}
+						}
 					}
 					else {
-						if (evnt.End.Ticks >= __EarliestIncludeEventTime.Ticks) {
+						var evnt = group.First();
+						if (evnt.End == null)
+							evnt.End = evnt.Start;
+
+						if (evnt.End.Ticks >= EarliestIncludeEventTime.Ticks) {
 							var ev = ToEvent(evnt);
 							if (ev != null)
-								events.Add(ev);
+								fevents.Add(ev);
 						}
 					}
 				}
 			}
-			return events
+			return fevents
 				.Where(e => e != null)
 				.Distinct(
 					e => e.Id,
 					(e, d) => {
 						if (e.Id == null)
 							return null;
-						e.Id += "_" + e.StartDate.XmlTime();
+						e.Id += "_" + e.Start.XmlTime();
 						if (d.ContainsKey(e.Id))
 							return null;
 						return e;
-				})
-				.OrderBy(e => e.StartDate)
+					})
+				.OrderBy(e => e.Start)
 				.ToArray();
+		}
+
+		public SEvent[] GetRecurringEvents(GroupKV<IEvent, string> group)
+		{
+			if (group == null || group.Count == 0) return null;
+			
+			var recurEvent = group.First(e => !e.RecurrenceRules.IsNullOrEmpty());
+			if(recurEvent == null) 
+				return null;
+		
+			IRecurrencePattern recurPtrn = recurEvent.RecurrenceRules.First();
+			SEvent[] results = GetRecurringEvents(recurEvent, recurPtrn).ToArray();
+			if (group.Count < 2)
+				return results;
+
+			SEvent[] others = group.Values
+				.Where(e => e != recurEvent && e.RecurrenceID != null && e.End.Ticks >= EarliestIncludeEventTime.Ticks && e.Start.UTC < _now.AddMonths(3))
+				.Select(e => ToEvent(e, true)).ToArray();
+
+			for (int i = 0; i < results.Length; i++) {
+				var r = results[i];
+				var o = others.FirstOrDefault(ev => ev.Start == r.RecurrenceId);
+				if (o != null) {
+					o.Id = r.Id;
+					results[i] = o;
+				}
+			}
+			
+			return results;
 		}
 
 		public IEnumerable<SEvent> GetRecurringEvents(IEvent evnt, IRecurrencePattern recur)
@@ -143,15 +161,15 @@ namespace DDay.iCal.Simple
 			if (rEvent.RRuleStr.IsNullOrEmpty())
 				yield break;
 
-			DateTime defMaxDT = __Now.AddMonths(1);
+			DateTime defMaxDT = _now.AddMonths(1);
 
-			IList<Occurrence> occurrences = evnt.GetOccurrences(__Now, __Now.AddMonths(1));
+			IList<Occurrence> occurrences = evnt.GetOccurrences(_now, _now.AddMonths(1));
 
 			if (occurrences == null)
 				yield break;
 
 			if (occurrences.Count < 2) {
-				occurrences = evnt.GetOccurrences(__Now, __Now.AddMonths(3));
+				occurrences = evnt.GetOccurrences(_now, _now.AddMonths(3));
 				if (occurrences == null || occurrences.Count == 0)
 					yield break;
 			}
@@ -159,7 +177,7 @@ namespace DDay.iCal.Simple
 			if (occurrences.Count > 6)
 				occurrences = occurrences.Take(6).ToList();
 
-			DateTime updated = evnt.LastModified.ToDateTime(evnt.Start.ToDateTime(__Now));
+			DateTime updated = evnt.LastModified.ToDateTime(evnt.Start.ToDateTime(_now));
 
 			for (int i = 0; i < occurrences.Count; i++) {
 
@@ -169,13 +187,32 @@ namespace DDay.iCal.Simple
 				IPeriod period = occurrences[i].Period;
 
 				bool hasTime;
-				ev.StartDate = GetLocalTime(period.StartTime, CurrentTimeZone, out hasTime);
-				ev.EndDate = GetLocalTime(period.EndTime, CurrentTimeZone, out hasTime);
-				ev.Updated = SetUpdatedEventTimeToStartTime ? ev.StartDate : updated;
+				ev.Start = GetLocalTime(period.StartTime, _currentTZ, out hasTime);
+				ev.End = GetLocalTime(period.EndTime, _currentTZ, out hasTime);
+				ev.Updated = SetUpdatedEventTimeToStartTime ? ev.Start : updated;
 
 				yield return ev;
 			}
 		}
+
+		#endregion
+
+		//public List<GroupKV<IEvent,string>> GetEventsTEMP(IICalendar[] calCollection)
+		//{
+		//	if (calCollection == null || calCollection.Length < 1)
+		//		return null;
+
+		//	__EarliestIncludeEventTime = EarliestDateForExcludingEvents();
+		//	__Now = DateTime.UtcNow;
+
+		//	var events = new List<SEvent>();
+
+		//	var cal = calCollection.First();
+
+		//	var list = cal.Events.GroupByQuick(e => e.UID);
+
+		//	return list;
+		//}
 
 		public SEvent ToEvent(IEvent evnt, bool isRecurringEvent = false)
 		{
@@ -183,19 +220,22 @@ namespace DDay.iCal.Simple
 				return null;
 
 			var cEvent = new SEvent();
+			cEvent.Event = evnt;
+			cEvent.Sequence = evnt.Sequence;
+			cEvent.RecurrenceId = evnt.RecurrenceID.ToDateTime(DateTime.MinValue);
 			cEvent.Id = evnt.UID;
-			cEvent.FeedId = GetQualifiedAtomId(evnt.UID, LocalIdBase);
+			cEvent.FeedId = GetQualifiedFeedId(evnt.UID, FeedIdBase);
 			cEvent.Title = evnt.Summary;
 			cEvent.Description = evnt.Description;
 			cEvent.LocationDescription = evnt.Location;
 			cEvent.IsAllDay = evnt.IsAllDay;
-			cEvent.TimeZone = CurrentTimeZone == null ? null : CurrentTimeZone.TZId();
+			cEvent.TimeZone = _currentTZ == null ? null : _currentTZ.TZId();
 
 			if (!isRecurringEvent) {
 				bool hasTime;
-				cEvent.StartDate = GetLocalTime(evnt.Start, CurrentTimeZone, out hasTime);
-				cEvent.EndDate = GetLocalTime(evnt.End, CurrentTimeZone, out hasTime);
-				cEvent.Updated = SetUpdatedEventTimeToStartTime ? cEvent.StartDate : evnt.LastModified.ToDateTime(cEvent.StartDate);
+				cEvent.Start = GetLocalTime(evnt.Start, _currentTZ, out hasTime);
+				cEvent.End = GetLocalTime(evnt.End, _currentTZ, out hasTime);
+				cEvent.Updated = SetUpdatedEventTimeToStartTime ? cEvent.Start : evnt.LastModified.ToDateTime(cEvent.Start);
 			}
 
 			cEvent.Url = evnt.Url == null ? null : evnt.Url.OriginalString;
@@ -207,6 +247,8 @@ namespace DDay.iCal.Simple
 			}
 			return cEvent;
 		}
+
+		#region HELPERS
 
 		public DateTime GetLocalTime(IDateTime iDt, TimeZoneInfo defTimeInfo, out bool hasTime)
 		{
@@ -235,21 +277,7 @@ namespace DDay.iCal.Simple
 			return dt;
 		}
 
-		#region OTHER
-
-		public static DateTime ClearTimeOfDay(DateTime dt)
-		{
-			return dt.AddTicks(-dt.TimeOfDay.Ticks);
-		}
-
-		public static DateTime EarliestDateForExcludingEvents(DateTime? fromTime = null)
-		{
-			DateTime dt = fromTime == null ? DateTime.UtcNow : (DateTime)fromTime;
-			DateTime minDate = dt.Add(TimeSpan.FromDays(-SimpleICal.NumPrevDaysToDisplay));
-			return minDate;
-		}
-
-		public static string GetQualifiedAtomId(string id, string localIdBase)
+		public static string GetQualifiedFeedId(string id, string localIdBase)
 		{
 			if (id.IsNullOrEmpty())
 				return null;
@@ -275,6 +303,11 @@ namespace DDay.iCal.Simple
 			return id;
 		}
 
+		//public static DateTime ClearTimeOfDay(DateTime dt)
+		//{
+		//	return dt == DateTime.MinValue ? dt : dt.AddTicks(-dt.TimeOfDay.Ticks);
+		//}
+
 		#endregion
 
 	}
@@ -297,10 +330,7 @@ namespace DDay.iCal.Simple
 
 		public static DateTime ToDateTime(this IDateTime dt, DateTime defaultDT)
 		{
-			if (dt == null)
-				return defaultDT;
-
-			return dt.UTC;
+			return dt == null ? defaultDT : dt.UTC;
 		}
 	}
 }

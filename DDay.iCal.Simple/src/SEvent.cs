@@ -11,16 +11,21 @@ namespace DDay.iCal.Simple
 
 		public SEvent() { }
 
+		public IEvent Event { get; set; }
 
 		public string Id { get; set; }
 
 		public string FeedId { get; set; }
 
-		public DateTime StartDate { get; set; }
+		public DateTime Start { get; set; }
 
-		public DateTime EndDate { get; set; }
+		public DateTime End { get; set; }
 
 		public DateTime Updated { get; set; }
+
+		public DateTime RecurrenceId { get; set; }
+
+		public int Sequence { get; set; }
 
 		public string Title { get; set; }
 
@@ -34,8 +39,8 @@ namespace DDay.iCal.Simple
 		{
 			get
 			{
-				return !(StartDate.Day == EndDate.Day
-					&& StartDate.Month == EndDate.Month);
+				return !(Start.Day == End.Day
+					&& Start.Month == End.Month);
 			}
 		}
 
@@ -43,7 +48,7 @@ namespace DDay.iCal.Simple
 		{
 			get
 			{
-				return Extensions.EventDateTimeShortDisplay(StartDate, EndDate, IsMultiDay, IsAllDay);
+				return Extensions.EventDateTimeShortDisplay(Start, End, IsMultiDay, IsAllDay);
 			}
 		}
 
@@ -82,8 +87,8 @@ namespace DDay.iCal.Simple
 			c.Id = Id + idAppendValue; // order matters, as FeedId may use ItemId, ExtUrl, etc
 			c.FeedId = FeedId + idAppendValue;
 			c.Title = Title;
-			c.StartDate = StartDate;
-			c.EndDate = EndDate;
+			c.Start = Start;
+			c.End = End;
 			c.IsAllDay = IsAllDay;
 			c.TimeZone = TimeZone;
 			c.Updated = Updated;
