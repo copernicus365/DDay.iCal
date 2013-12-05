@@ -147,15 +147,15 @@ namespace DDay.iCal.Simple
 		}
 
 		#endregion
-	
-		public static string AmPm(this DateTime dt, bool lower = true)
+
+		public static string AmPm(this DateTimeOffset dt, bool lower = true)
 		{
 			return dt.Hour < 12
 				? (lower ? "am" : "AM")
 				: (lower ? "pm" : "PM");
 		}
 
-		public static string EventDateTimeShortDisplay(DateTime start, DateTime end, bool isMultiDay, bool isAllDay)
+		public static string EventDateTimeShortDisplay(DateTimeOffset start, DateTimeOffset end, bool isMultiDay, bool isAllDay)
 		{
 			if (isMultiDay) {
 				string val = null;
@@ -192,7 +192,7 @@ namespace DDay.iCal.Simple
 				return val;
 			}
 			if (isAllDay) {
-				return start.ToString("MMM dd, yyyy") + " All Day";
+				return start.ToString("MMM dd, yyyy");// +" All Day";
 			}
 			else {
 				return string.Format("{0}{1} - {2}{3})",

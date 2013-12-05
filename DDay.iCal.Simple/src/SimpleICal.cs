@@ -21,6 +21,8 @@ namespace DDay.iCal.Simple
 		private DateTime _now = DateTime.UtcNow;
 		private TimeZoneInfo _currentTZ;
 
+		static readonly TimeSpan con_EmptyTime = TimeSpan.FromSeconds(0);
+
 		#endregion
 
 		#region CONSTRUCTOR
@@ -111,7 +113,7 @@ namespace DDay.iCal.Simple
 					(e, d) => {
 						if (e.Id == null)
 							return null;
-						e.Id += "_" + e.Start.XmlTime();
+						e.Id += "_" + e.Start.DateTime.XmlTime();
 						if (d.ContainsKey(e.Id))
 							return null;
 						return e;
@@ -134,8 +136,8 @@ namespace DDay.iCal.Simple
 				return results;
 
 			SEvent[] others = group.Values
-				.Where(e => e != recurEvent && e.RecurrenceID != null && e.End.Ticks >= EarliestIncludeEventTime.Ticks && e.Start.UTC < _now.AddMonths(3))
-				.Select(e => ToEvent(e, true)).ToArray();
+				.Where(e => e != recurEvent && e.RecurrenceRules.IsNullOrEmpty() && e.RecurrenceID != null && e.End.Ticks >= EarliestIncludeEventTime.Ticks && e.Start.UTC < _now.AddMonths(3))
+				.Select(e => ToEvent(e)).ToArray();
 
 			for (int i = 0; i < results.Length; i++) {
 				var r = results[i];
@@ -163,13 +165,13 @@ namespace DDay.iCal.Simple
 
 			DateTime defMaxDT = _now.AddMonths(1);
 
-			IList<Occurrence> occurrences = evnt.GetOccurrences(_now, _now.AddMonths(1));
+			IList<Occurrence> occurrences = evnt.GetOccurrences(EarliestIncludeEventTime, _now.AddMonths(1));
 
 			if (occurrences == null)
 				yield break;
 
 			if (occurrences.Count < 2) {
-				occurrences = evnt.GetOccurrences(_now, _now.AddMonths(3));
+				occurrences = evnt.GetOccurrences(EarliestIncludeEventTime, _now.AddMonths(3));
 				if (occurrences == null || occurrences.Count == 0)
 					yield break;
 			}
@@ -189,7 +191,8 @@ namespace DDay.iCal.Simple
 				bool hasTime;
 				ev.Start = GetLocalTime(period.StartTime, _currentTZ, out hasTime);
 				ev.End = GetLocalTime(period.EndTime, _currentTZ, out hasTime);
-				ev.Updated = SetUpdatedEventTimeToStartTime ? ev.Start : updated;
+				ev.Updated = SetUpdatedEventTimeToStartTime ? ev.Start.DateTime : updated;
+				ev.IsAllDay = ev.Start.TimeOfDay == con_EmptyTime && ev.End.TimeOfDay == con_EmptyTime;
 
 				yield return ev;
 			}
@@ -214,29 +217,41 @@ namespace DDay.iCal.Simple
 		//	return list;
 		//}
 
-		public SEvent ToEvent(IEvent evnt, bool isRecurringEvent = false)
+		public SEvent ToEvent(IEvent evnt, bool isRecurrenceRuleOnly = false)
 		{
 			if (evnt == null || evnt.UID.IsNullOrEmpty())
 				return null;
 
+			if (evnt.Start == null) evnt.Start = new iCalDateTime(_now);
+			if (evnt.End == null) evnt.End = new iCalDateTime(_now);
+			if (evnt.LastModified == null) evnt.LastModified = new iCalDateTime(_now);
+
 			var cEvent = new SEvent();
 			cEvent.Event = evnt;
 			cEvent.Sequence = evnt.Sequence;
-			cEvent.RecurrenceId = evnt.RecurrenceID.ToDateTime(DateTime.MinValue);
 			cEvent.Id = evnt.UID;
 			cEvent.FeedId = GetQualifiedFeedId(evnt.UID, FeedIdBase);
 			cEvent.Title = evnt.Summary;
 			cEvent.Description = evnt.Description;
 			cEvent.LocationDescription = evnt.Location;
-			cEvent.IsAllDay = evnt.IsAllDay;
 			cEvent.TimeZone = _currentTZ == null ? null : _currentTZ.TZId();
+			cEvent.IsAllDay = evnt.IsAllDay;
 
-			if (!isRecurringEvent) {
-				bool hasTime;
-				cEvent.Start = GetLocalTime(evnt.Start, _currentTZ, out hasTime);
-				cEvent.End = GetLocalTime(evnt.End, _currentTZ, out hasTime);
-				cEvent.Updated = SetUpdatedEventTimeToStartTime ? cEvent.Start : evnt.LastModified.ToDateTime(cEvent.Start);
+			bool hasTime = false;
+			bool hasStartTime = false;
+			bool hasEndTime = false;
+			if (!isRecurrenceRuleOnly) {
+
+				cEvent.Start = GetLocalTime(evnt.Start, _currentTZ, out hasStartTime);
+				cEvent.End = GetLocalTime(evnt.End, _currentTZ, out hasEndTime);
+				cEvent.RecurrenceId = GetLocalTime(evnt.RecurrenceID, _currentTZ, out hasTime);
 			}
+			cEvent.Updated = SetUpdatedEventTimeToStartTime 
+				? cEvent.Start.DateTime 
+				: evnt.LastModified.Value; //.ToDateTime(cEvent.Start.DateTime);
+			
+			if (!cEvent.IsAllDay && !hasStartTime && !hasEndTime)
+				cEvent.IsAllDay = true;
 
 			cEvent.Url = evnt.Url == null ? null : evnt.Url.OriginalString;
 
@@ -250,12 +265,13 @@ namespace DDay.iCal.Simple
 
 		#region HELPERS
 
-		public DateTime GetLocalTime(IDateTime iDt, TimeZoneInfo defTimeInfo, out bool hasTime)
+		public DateTimeOffset GetLocalTime(IDateTime iDt, TimeZoneInfo defTimeInfo, out bool hasTime)
 		{
+			hasTime = false;
 			if (iDt == null)
-				throw new ArgumentNullException();
+				return DateTime.MinValue;
 
-			DateTime dt = iDt.Local;
+			DateTime dt = iDt.Value; //.Local; //.Value; //.Local; okay, this will pry break everything! what to do?
 
 			hasTime = iDt.HasTime;
 			if (!hasTime)

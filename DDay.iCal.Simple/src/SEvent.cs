@@ -17,13 +17,13 @@ namespace DDay.iCal.Simple
 
 		public string FeedId { get; set; }
 
-		public DateTime Start { get; set; }
+		public DateTimeOffset Start { get; set; }
 
-		public DateTime End { get; set; }
+		public DateTimeOffset End { get; set; }
+
+		public DateTimeOffset RecurrenceId { get; set; }
 
 		public DateTime Updated { get; set; }
-
-		public DateTime RecurrenceId { get; set; }
 
 		public int Sequence { get; set; }
 
@@ -35,12 +35,22 @@ namespace DDay.iCal.Simple
 
 		public bool IsAllDay { get; set; }
 
+		static readonly TimeSpan con_emptyTime = TimeSpan.FromSeconds(0);
 		public bool IsMultiDay
 		{
 			get
 			{
-				return !(Start.Day == End.Day
-					&& Start.Month == End.Month);
+				long diff = End.Ticks - Start.Ticks;
+				
+				if (diff <= 0 || (diff < TimeSpan.TicksPerDay && Start.Day == End.Day))
+					return false;
+
+				// This allows IsMultiDay = FALSE IF: May 02, 2013 12:00 am - May 03, 2013 12:00 am, 
+				// which is frequent if it really was just 'AllDay'
+				if (diff == TimeSpan.TicksPerDay && Start.Hour == 0)
+					return false;
+
+				return true;
 			}
 		}
 
