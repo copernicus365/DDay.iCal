@@ -99,6 +99,7 @@ namespace DDay.iCal.Simple
 			c.Title = Title;
 			c.Start = Start;
 			c.End = End;
+			c.RecurrenceId = RecurrenceId;
 			c.IsAllDay = IsAllDay;
 			c.TimeZone = TimeZone;
 			c.Updated = Updated;

@@ -22,6 +22,7 @@ namespace DDay.iCal.Simple
 		private TimeZoneInfo _currentTZ;
 
 		static readonly TimeSpan con_EmptyTime = TimeSpan.FromSeconds(0);
+		static readonly SEvent[] con_EmptySEventsArr = new SEvent[0];
 
 		#endregion
 
@@ -79,24 +80,19 @@ namespace DDay.iCal.Simple
 				if (_currentTZ == null)
 					_currentTZ = DefaultTimeZone;
 
-				var events = cal.Events.Where(e => e != null && e.Start != null).GroupByQuick(e => e.UID);
+				var events = cal.Events.Where(e => e != null).GroupByQuick(e => e.UID);
 
-				foreach (var group in events) {
+				foreach (var eventOrGroup in events) {
 
-					SEvent[] recurringEvents = GetRecurringEvents(group);
-
-					if (recurringEvents != null) {
-						foreach (var ev in recurringEvents) {
-							if (ev != null) {
-								if (ev.End == null) ev.End = ev.Start;
-								fevents.Add(ev);
-							}
-						}
-					}
+					// if more than 1 (is a group), we'll REQUIRE it to be a recurrant event. if not is discarded
+					SEvent[] recurringEvents = GetRecurringEvents(eventOrGroup);					
+					if (!recurringEvents.IsNullOrEmpty())
+						fevents.AddRange(recurringEvents);
 					else {
-						var evnt = group.First();
-						if (evnt.End == null)
-							evnt.End = evnt.Start;
+						var evnt = eventOrGroup.First;
+						
+						if (evnt.Start == null) continue;
+						if (evnt.End == null) evnt.End = evnt.Start;
 
 						if (evnt.End.Ticks >= EarliestIncludeEventTime.Ticks) {
 							var ev = ToEvent(evnt);
@@ -108,40 +104,51 @@ namespace DDay.iCal.Simple
 			}
 			return fevents
 				.Where(e => e != null)
-				.Distinct(
-					e => e.Id,
-					(e, d) => {
-						if (e.Id == null)
-							return null;
-						e.Id += "_" + e.Start.DateTime.XmlTime();
-						if (d.ContainsKey(e.Id))
-							return null;
-						return e;
-					})
+				//.Distinct( // not needed anymore, our use of GroupByQuick already sorts ids
+				//	e => e.Id,
+				//	(e, d) => {
+				//		if (e.Id == null)
+				//			return null;
+				//		e.Id += "_" + e.Start.DateTime.XmlTime();
+				//		if (d.ContainsKey(e.Id))
+				//			return null;
+				//		return e;
+				//	})
 				.OrderBy(e => e.Start)
 				.ToArray();
 		}
 
+		/// <summary>
+		/// Returns null if group did not contain a recurring event, or if group is null or empty.
+		/// If group *does* contain a recurring event, even if no actual occurences are gotten from the rule,
+		/// will still guarantee to return an empty array (to indicate it *was* a recurring, but no instances
+		/// resulted).
+		/// </summary>
+		/// <param name="group">Event group.</param>
 		public SEvent[] GetRecurringEvents(GroupKV<IEvent, string> group)
 		{
 			if (group == null || group.Count == 0) return null;
 			
-			var recurEvent = group.First(e => !e.RecurrenceRules.IsNullOrEmpty());
+			var recurEvent = group.FirstOrDefault(e => !e.RecurrenceRules.IsNullOrEmpty());
 			if(recurEvent == null) 
 				return null;
 		
 			IRecurrencePattern recurPtrn = recurEvent.RecurrenceRules.First();
-			SEvent[] results = GetRecurringEvents(recurEvent, recurPtrn).ToArray();
-			if (group.Count < 2)
+			SEvent[] results = GetRecurringEvents(recurEvent, recurPtrn).Where(e => e != null).ToArray();
+			if (results == null)
+				return con_EmptySEventsArr; // NULL return means was not recurring, so  we must return empty array
+			if (!group.HasMany)
 				return results;
 
-			SEvent[] others = group.Values
-				.Where(e => e != recurEvent && e.RecurrenceRules.IsNullOrEmpty() && e.RecurrenceID != null && e.End.Ticks >= EarliestIncludeEventTime.Ticks && e.Start.UTC < _now.AddMonths(3))
+				//e.RecurrenceRules.IsNullOrEmpty() &&  && 
+			DateTime maxRecurDT = _now.AddMonths(3);
+			SEvent[] others = group.Items
+				.Where(e => e.RecurrenceID != null && e.Start != null && e.Start.Value >= EarliestIncludeEventTime && e.Start.Value < maxRecurDT)
 				.Select(e => ToEvent(e)).ToArray();
 
 			for (int i = 0; i < results.Length; i++) {
 				var r = results[i];
-				var o = others.FirstOrDefault(ev => ev.Start == r.RecurrenceId);
+				var o = others.FirstOrDefault(ev => ev.RecurrenceId == r.Start);
 				if (o != null) {
 					o.Id = r.Id;
 					results[i] = o;
