@@ -38,6 +38,9 @@
     <Reference Include="DotNetXtensions">
       <HintPath>..\..\bin\DotNetXtensions\DotNetXtensions.dll</HintPath>
     </Reference>
+    <Reference Include="DotNetXtensions.Globalization">
+      <HintPath>..\..\bin\DotNetXtensions\DotNetXtensions.Globalization.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -49,7 +52,6 @@
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="src\Extensions.cs" />
-    <Compile Include="src\ISEvent.cs" />
     <Compile Include="src\SimpleICal.cs" />
     <Compile Include="src\SEvent.cs" />
   </ItemGroup>
